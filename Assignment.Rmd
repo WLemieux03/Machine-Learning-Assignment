@@ -1,0 +1,82 @@
+---
+title: "Assignment"
+author: "William Lemieux"
+date: "August 31, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+Using data from accelerometers worn by exercise enthusiasts, we aim to develop a model predicting if an exercise was perfomed correctly, or incorrectly. Five states were identified: a correct state (A) and four types of error in the movement (B to E). 
+
+## Data loading
+
+The data is downloaded if not already present in the working directory, and each set is loaded to a dataframe in the memory. 
+```{r}
+if(!file.exists("pml-training.csv")){
+        download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", "pml-training.csv", "auto")
+}
+if(!file.exists("pml-testing.csv")){
+        download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", "pml-testing.csv", "auto")
+}
+training <- read.csv("pml-training.csv", stringsAsFactors=FALSE)
+testing <- read.csv("pml-testing.csv", stringsAsFactors=FALSE)
+```
+
+
+## Data cleaning
+The data is checked for missing values per column:
+```{r}
+colNA<-colSums(is.na(training)|training=="")
+sumColNA<-sum(colNA > 0)
+rowNA<-rowSums(is.na(training)|training=="")
+```
+And it can be seen that among the `{r} length(colnames)` variables in the table, `{r} sumColNA` have missing values (`{r} unique(colNA[colNA>0,])`/`{r} length(colNA)`). Moreover, the points missing values all miss `{r} unique(rowNA[rowNA>0,])` variables. These variables are unreliable to perform prediction since they are missing in so many cases. They cannot be used for the analysis and are removed:
+```{r}
+training<-training[,colNA==0]
+testing<-testing[,colNA==0]
+```
+
+The variables refering to the belt, arm (and forearm) and dumbell are further subsetted. 
+```{r}
+subset <- grepl("belt|arm|dumbell|classe", names(training))
+training<-training[,subset]
+testing<-testing[,subset]
+```
+
+## Model fitting
+The data is split and 10% is fitted on a random forest model. The out of ample error is evaluated on the validation dataset (remaining 90%). Only 10% is used to build the model for computational limitations. 
+```{r}
+library(caret)
+set.seed(13313)
+inTrain <‐ createDataPartition(y=training$classe,p=0.1, list=FALSE)
+train <- training[inTrain,]
+validate <- training[-inTrain,]
+
+trCtl <- trainControl(method="cv", number=3, verboseIter=FALSE)
+mod <- train(classe~., method="rf", data=train, trControl=trCtl)
+predTrain <- predict(mod, train)
+confusionMatrix(predTrain, train$classe)
+```
+The in sample accuracy is calculated as 100%,
+
+The out sample error is calculated on the validation data set.
+```{r}
+predVal <- predict(mod, validate)
+confusionMatrix(predVal, validate$classe)
+```
+The out sample accuracy is of 92.2%, which is close to 100 and is acceptable, even if it could be better. 
+
+## Prediction 
+The test dataset is predicted using the random forest model. 
+```{r}
+predTest <- predict(mod, testing)
+predTest
+```
+
+## Conclusion
+It was possible to predict the test classe of error. The out sample accuracy is estimated as 92.2%. 
+
